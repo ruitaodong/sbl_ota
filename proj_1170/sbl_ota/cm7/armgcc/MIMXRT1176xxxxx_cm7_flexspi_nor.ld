@@ -5,15 +5,15 @@
 **                          MIMXRT1176DVMAA_cm7
 **
 **     Compiler:            GNU C Compiler
-**     Reference manual:    IMXRT1170RM, Rev 0, 12/2020
-**     Version:             rev. 1.0, 2020-12-29
-**     Build:               b210225
+**     Reference manual:    IMXRT1170RM, Rev E, 12/2019
+**     Version:             rev. 0.1, 2018-03-05
+**     Build:               b200723
 **
 **     Abstract:
 **         Linker file for the GNU C Compiler
 **
 **     Copyright 2016 Freescale Semiconductor, Inc.
-**     Copyright 2016-2021 NXP
+**     Copyright 2016-2020 NXP
 **     All rights reserved.
 **
 **     SPDX-License-Identifier: BSD-3-Clause
@@ -39,7 +39,6 @@ MEMORY
   m_ivt                 (RX)  : ORIGIN = 0x30001000, LENGTH = 0x00001000
   m_interrupts          (RX)  : ORIGIN = 0x30002000, LENGTH = 0x00000400
   m_text                (RX)  : ORIGIN = 0x30002400, LENGTH = 0x00FBDC00
-  m_qacode              (RX)  : ORIGIN = 0x00000000, LENGTH = 0x00040000
   m_data                (RW)  : ORIGIN = 0x20000000, LENGTH = 0x00040000
   m_data2               (RW)  : ORIGIN = 0x202C0000 + RPMSG_SHMEM_SIZE, LENGTH = 0x00080000 - RPMSG_SHMEM_SIZE
   rpmsg_sh_mem          (RW)  : ORIGIN = 0x202C0000, LENGTH = RPMSG_SHMEM_SIZE
@@ -103,10 +102,38 @@ SECTIONS
   .text :
   {
     . = ALIGN(4);
-    *(.text)                 /* .text sections (code) */
-    *(.text*)                /* .text* sections (code) */
-    *(.rodata)               /* .rodata sections (constants, strings, etc.) */
-    *(.rodata*)              /* .rodata* sections (constants, strings, etc.) */
+    *(EXCLUDE_FILE(
+        /* Exclude flash and frequently executed functions from XIP */
+        */flexspi_nor_flash_ops.c.obj
+        */fsl_flexspi.c.obj
+        */fsl_flexspi_edma.c.obj
+        */fsl_edma.c.obj
+        */fsl_clock.c.obj
+    ) .text)                 /* .text sections (code) */
+    *(EXCLUDE_FILE(
+        /* Exclude flash and frequently executed functions from XIP */
+        */flexspi_nor_flash_ops.c.obj
+        */fsl_flexspi.c.obj
+        */fsl_flexspi_edma.c.obj
+        */fsl_edma.c.obj
+        */fsl_clock.c.obj
+    ) .text*)                /* .text* sections (code) */
+    *(EXCLUDE_FILE(
+        /* Exclude flash and frequently executed functions from XIP */
+        */flexspi_nor_flash_ops.c.obj
+        */fsl_flexspi.c.obj
+        */fsl_flexspi_edma.c.obj
+        */fsl_edma.c.obj
+        */fsl_clock.c.obj
+    ) .rodata)               /* .rodata sections (constants, strings, etc.) */
+    *(EXCLUDE_FILE(
+        /* Exclude flash and frequently executed functions from XIP */
+        */flexspi_nor_flash_ops.c.obj
+        */fsl_flexspi.c.obj
+        */fsl_flexspi_edma.c.obj
+        */fsl_edma.c.obj
+        */fsl_clock.c.obj
+    ) .rodata*)              /* .rodata* sections (constants, strings, etc.) */
     *(.glue_7)               /* glue arm to thumb code */
     *(.glue_7t)              /* glue thumb to arm code */
     *(.eh_frame)
@@ -208,25 +235,19 @@ SECTIONS
     __DATA_RAM = .;
     __data_start__ = .;      /* create a global symbol at data start */
     *(m_usb_dma_init_data)
+    /* Explicit placement of flash and frequently executed functions in RAM */
+    */flexspi_nor_flash_ops.c.obj(.text .text* .rodata .rodata*)
+    */fsl_flexspi.c.obj(.text .text* .rodata .rodata*)
+    */fsl_flexspi_edma.c.obj(.text .text* .rodata .rodata*)
+    */fsl_edma.c.obj(.text .text* .rodata .rodata*)
+    */fsl_clock.c.obj(.text .text* .rodata .rodata*)
     *(.data)                 /* .data sections */
     *(.data*)                /* .data* sections */
     KEEP(*(.jcr*))
     . = ALIGN(4);
     __data_end__ = .;        /* define a global symbol at data end */
   } > m_data
-
-  __ram_function_flash_start = __DATA_ROM + (__data_end__ - __data_start__); /* Symbol is used by startup for TCM data initialization */
-
-  .ram_function : AT(__ram_function_flash_start)
-  {
-    . = ALIGN(32);
-    __ram_function_start__ = .;
-    *(CodeQuickAccess)
-    . = ALIGN(128);
-    __ram_function_end__ = .;
-  } > m_qacode
-
-  __NDATA_ROM = __ram_function_flash_start + (__ram_function_end__ - __ram_function_start__);
+  __NDATA_ROM = __DATA_ROM + (__data_end__ - __data_start__);
   .ncache.init : AT(__NDATA_ROM)
   {
     __noncachedata_start__ = .;   /* create a global symbol at ncache data start */
@@ -283,8 +304,6 @@ SECTIONS
   __StackTop   = ORIGIN(m_data) + LENGTH(m_data);
   __StackLimit = __StackTop - STACK_SIZE;
   PROVIDE(__stack = __StackTop);
-  PROVIDE(_pvHeapStart = __HeapBase);
-  PROVIDE(_pvHeapLimit = __HeapLimit);
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
 
